@@ -1,6 +1,5 @@
 package bot;
 
-import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.service.AuthenticationService;
 import com.github.steveice10.mc.auth.service.MojangAuthenticationService;
 import com.github.steveice10.mc.auth.service.SessionService;
@@ -21,12 +20,18 @@ public class MinecraftBot {
 
 	private String username;
 	private String password;
+	
 	private AuthenticationService authService;
 	private Session session;
+	
+	private ControlledMessageSender cms;
+	private ChatReader cr;
 	
 	public MinecraftBot(String username, String password) {
 		this.username = username;
 		this.password = password;
+		this.cms = new ControlledMessageSender(this);
+		this.cr = new ChatReader(this);
 		authenticate();
 	}
 	
@@ -55,7 +60,7 @@ public class MinecraftBot {
 					System.out.println("Logged in succesfully");
 				} else if (packet instanceof ClientboundChatPacket) {
 					Component message = ((ClientboundChatPacket) packet).getMessage();
-					System.out.println(message);
+					cr.readLine(message);
 				}
 			}
 
@@ -71,8 +76,24 @@ public class MinecraftBot {
 		session.connect();
 	}
 	
+	/**
+	 * Instantly sends a message to the server
+	 * @param message
+	 */
 	public void sendMessage(String message) {
 		session.send(new ServerboundChatPacket(message));
+	}
+	
+	/**
+	 * Queues up messages and sends them out at a controlled pace
+	 * @param message
+	 */
+	public void sendControlledMessage(String message) {
+		cms.sendMessage(message);
+	}
+	
+	public String getUsername() {
+		return username;
 	}
 
 }
