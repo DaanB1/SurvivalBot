@@ -96,12 +96,10 @@ public class AuctionTracker {
 		// calculate simple statistics from data
 		double totalAvg = totalPrice / (double) totalCount;
 	
-		if (stackable) {
-			System.out.println("DEBUG: " + totalAvg + ", " + totalAvg * 64 + ", " + (int) (totalAvg * 64));
-			System.out.println("DEBUG: " + totalPrice + ", " + totalCount);
-			return "64 " + item + " sells on average for " + (int) (totalAvg * 64) + "g (" + totalCount + " total sales)";
+		if (stackable && totalAvg < 3) {
+			return "64 " + item + " sells on average for $" + (int) (totalAvg * 64) + " (" + totalCount + " total sales)";
 		} else
-			return "1 " + item + " sells on average for " + (int) totalAvg + "g (" + totalCount + " total sales)";
+			return "1 " + item + " sells on average for $" + (int) totalAvg + " (" + totalCount + " total sales)";
 	}
 
 	private String bestGuess(String itemGuess) {
