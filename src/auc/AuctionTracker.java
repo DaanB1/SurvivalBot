@@ -12,6 +12,7 @@ public class AuctionTracker {
 
 	private Database db;
 	private ArrayList<String> knownItems;
+	private String seller;
 	private String item;
 	private short count;
 
@@ -22,17 +23,17 @@ public class AuctionTracker {
 		db = new Database();
 
 		try {
-			ResultSet rs = db.getStatement().executeQuery("SELECT DISTINCT item FROM auctions;");
+			ResultSet rs = db.getStatement().executeQuery("SELECT DISTINCT item FROM survauc;");
 			while (rs.next()) {
 				knownItems.add(rs.getString("item").stripTrailing());
 			}
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 
-	public void aucStart(String item, short count) {
+	public void aucStart(String seller, String item, short count) {
+		this.seller = seller;
 		this.item = item.replaceAll("'", "");
 		this.count = count;
 	}
@@ -40,8 +41,8 @@ public class AuctionTracker {
 	public void aucEnd(long price, String buyer) {
 		if (item != null) {
 			Timestamp datetime = Timestamp.from(Instant.now());
-			String querry = "INSERT INTO auctions VALUES ('" + item + "'," + count + "," + price + ",'" + datetime
-					+ "')";
+			String querry = "INSERT INTO survauc VALUES ('" + item + "'," + count + "," + price + ",'" + seller + "','"
+					+ buyer + "','" + datetime + "')";
 			try {
 				db.getStatement().executeUpdate(querry);
 			} catch (SQLException e) {
@@ -64,11 +65,12 @@ public class AuctionTracker {
 		long recentPrice = 0;
 		int totalCount = 0;
 		int recentCount = 0;
+		boolean stackable = false;
 
 		Instant now = Instant.now();
 		// retrieve data about item from database
 		try {
-			String querry = "SELECT count, price, datetime FROM auctions WHERE item = '" + item + "'";
+			String querry = "SELECT count, price, datetime FROM survauc WHERE item = '" + item + "'";
 			ResultSet rs = db.getStatement().executeQuery(querry);
 			while (rs.next()) {
 				short count = rs.getShort("count");
@@ -81,6 +83,9 @@ public class AuctionTracker {
 					recentPrice += price;
 					recentCount += count;
 				}
+				if (count > 1) {
+					stackable = true;
+				}
 			}
 		} catch (SQLException e) {
 			// item does not exist in database
@@ -89,18 +94,14 @@ public class AuctionTracker {
 		}
 
 		// calculate simple statistics from data
-		long totalAvg;
-		long recentAvg;
-		if (totalCount != 0)
-			totalAvg = totalPrice / totalCount;
-		else
-			totalAvg = 0;
-		if (recentCount != 0)
-			recentAvg = recentPrice / recentCount;
-		else
-			recentAvg = 0;
-		return item + ": All time average = " + totalAvg + " (" + totalCount + " sales). Recent average = " + recentAvg
-				+ " (" + recentCount + " sales).";
+		double totalAvg = totalPrice / (double) totalCount;
+	
+		if (stackable) {
+			System.out.println("DEBUG: " + totalAvg + ", " + totalAvg * 64 + ", " + (int) (totalAvg * 64));
+			System.out.println("DEBUG: " + totalPrice + ", " + totalCount);
+			return "64 " + item + " sells on average for " + (int) (totalAvg * 64) + "g (" + totalCount + " total sales)";
+		} else
+			return "1 " + item + " sells on average for " + (int) totalAvg + "g (" + totalCount + " total sales)";
 	}
 
 	private String bestGuess(String itemGuess) {

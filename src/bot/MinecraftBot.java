@@ -20,13 +20,14 @@ public class MinecraftBot {
 
 	private String username;
 	private String password;
-	
+	private String host;
+
 	private AuthenticationService authService;
 	private Session session;
-	
+
 	private ControlledMessageSender cms;
 	private ChatReader cr;
-	
+
 	public MinecraftBot(String username, String password) {
 		this.username = username;
 		this.password = password;
@@ -34,66 +35,95 @@ public class MinecraftBot {
 		this.cr = new ChatReader(this);
 		authenticate();
 	}
-	
+
+	/**
+	 * Connects to Mojang authentication service to verify credentials
+	 */
 	private void authenticate() {
+		System.out.println("Authenticating bot...");
 		try {
-			AuthenticationService authService = new MojangAuthenticationService();
+			authService = new MojangAuthenticationService();
 			authService.setUsername(username);
 			authService.setPassword(password);
 			authService.login();
-		} catch(Exception e) {
+			System.out.println("Successfully authenticated bot");
+		} catch (Exception e) {
 			System.err.println("Failed to authenticate bot");
+			System.err.println(e.getMessage());
 		}
 	}
-	
-	
+
+	/**
+	 * Joins the server. Bot must have been authenticated for this to work.
+	 * 
+	 * @param host : the server ip
+	 */
 	public void login(String host) {
-		MinecraftProtocol protocol = new MinecraftProtocol(authService.getSelectedProfile(), authService.getAccessToken());
+		System.out.println("Joining " + host + "...");
+		this.host = host;
+		MinecraftProtocol protocol = new MinecraftProtocol(authService.getSelectedProfile(),
+				authService.getAccessToken());
 		SessionService sessionService = new SessionService();
 		session = new TcpClientSession(host, 25565, protocol);
 		session.setFlag(MinecraftConstants.SESSION_SERVICE_KEY, sessionService);
 		session.addListener(new SessionAdapter() {
-			
+
 			@Override
 			public void packetReceived(Session session, Packet packet) {
 				if (packet instanceof ClientboundLoginPacket) {
 					System.out.println("Logged in succesfully");
 				} else if (packet instanceof ClientboundChatPacket) {
-					Component message = ((ClientboundChatPacket) packet).getMessage();
-					cr.readLine(message);
+					try {
+						Component message = ((ClientboundChatPacket) packet).getMessage();
+						cr.readLine(message);
+					} catch (Exception e) {
+						System.err.println(e.getMessage());
+						e.printStackTrace();
+					}
 				}
 			}
 
 			@Override
 			public void disconnected(DisconnectedEvent event) {
 				System.out.println("Disconnected: " + event.getReason());
-				if (event.getCause() != null) {
-					event.getCause().printStackTrace();
-				}
+				reconnect();
 			}
 		});
 
 		session.connect();
+		System.out.println("Joined server successfully");
 	}
-	
+
+	private void reconnect() {
+		try {
+			// login(host);
+		} catch (Exception e) {
+			System.err.println("Failed to reconnect to server");
+			System.err.println(e.getMessage());
+			// TODO: Attempt to reconnect every 5 minutes until it is successful
+		}
+	}
+
 	/**
 	 * Instantly sends a message to the server
+	 * 
 	 * @param message
 	 */
 	public void sendMessage(String message) {
 		session.send(new ServerboundChatPacket(message));
 	}
-	
+
 	/**
 	 * Queues up messages and sends them out at a controlled pace
+	 * 
 	 * @param message
 	 */
 	public void sendControlledMessage(String message) {
 		cms.sendMessage(message);
 	}
-	
+
 	public String getUsername() {
-		return username;
+		return authService.getSelectedProfile().getName();
 	}
 
 }

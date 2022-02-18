@@ -2,6 +2,7 @@ package bot;
 
 import auc.AuctionTracker;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 
 public class ChatReader {
 
@@ -15,35 +16,52 @@ public class ChatReader {
 
 	public void readLine(Component message) {
 		String line = getMessage(message);
+		System.out.println(line);
 		String[] words = line.split(" ");
+		if (words.length == 0)
+			return;
 		if (words[0].contentEquals("AUCTION"))
 			trackAuc(words);
-		else if (words[0].equalsIgnoreCase(bot.getUsername())) {
+		else if (line.contains(bot.getUsername()) || line.contains("§8(§aFrom")) {
 			readCommand(line, words);
 		}
 	}
 
+	/**
+	 * Converts Component to readable string
+	 * @param message
+	 * @return
+	 */
 	private String getMessage(Component message) {
 		StringBuilder sb = new StringBuilder();
-		sb.append(message.toString());
-		for (Component child : message.children()) {
-			sb.append(child.toString());
+		if (message instanceof TextComponent) {
+			sb.append(((TextComponent) message).content());
+			for (Component child : message.children()) {
+				if (child instanceof TextComponent)
+					sb.append(((TextComponent) child).content());
+			}
 		}
 		return sb.toString();
 	}
 
+	/**
+	 * Extracts information from auction messages and calls the AuctionTracker
+	 * @param words
+	 */
 	private void trackAuc(String[] words) {
 		try {
 			if (words[4].contentEquals("auctioning")) { // auction start
-				short count = Short.parseShort(words[5]);
 				StringBuilder name = new StringBuilder();
 				for (int i = 6; i < words.length; i++) {
-					if (words[i].contentEquals("for"))
+					if (words[i].contentEquals("for") || words[i].contentEquals("|"))
 						break;
 					else
 						name.append(words[i] + " ");
 				}
-				tracker.aucStart(name.substring(0, name.length() - 1), count);
+				String item = name.substring(0, name.length() - 1);
+				String buyer = words[2];
+				short count = Short.parseShort(words[5]);
+				tracker.aucStart(buyer, item, count);
 			} else if (words[6].contentEquals("won")) { // auction finished
 				String priceString = words[8].replaceAll(",", "");
 				priceString = priceString.substring(1);
@@ -58,12 +76,15 @@ public class ChatReader {
 		}
 	}
 
+	/**
+	 * 
+	 * @param line
+	 * @param words
+	 */
 	private void readCommand(String line, String[] words) {
 		if (line.contains(" price ") && (!line.contains("(From ") || !line.contains("§8(§aFrom"))) {
 			String guess = line.substring(line.indexOf(" price ") + 7, line.length());
 			String answer = tracker.getItemInfo(guess);
-			System.out.println("Guess = " + guess);
-			System.out.println("Anwer = " + answer);
 			bot.sendControlledMessage(answer);
 		}
 	}

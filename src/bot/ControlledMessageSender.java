@@ -11,35 +11,50 @@ import java.util.TimerTask;
 public class ControlledMessageSender {
 
 	private MinecraftBot bot;
+	private ChatExecutor task;
+	private Timer timer;
 	private Queue<String> messageQueue;
-	private TimerTask task;
+	
+	private static final int CHAT_COOLDOWN = 3000;
+	private static final int MAX_QUEUE_SIZE = 5;
 
 	public ControlledMessageSender(MinecraftBot bot) {
 		this.bot = bot;
 		this.messageQueue = new LinkedList<>();
+		this.task = new ChatExecutor();
 	}
 
 	public void sendMessage(String message) {
-		if (messageQueue.isEmpty()) {
-			bot.sendMessage(message);
+		if(messageQueue.size() > MAX_QUEUE_SIZE)
 			return;
-		}
+		
 		messageQueue.add(message);
-		if (task == null) {
-			task = new TimerTask() {
-				@Override
-				public void run() {
-					if (messageQueue.isEmpty()) {
-						this.cancel();
-						return;
-					}
-					String message = messageQueue.remove();
-					bot.sendMessage(message);
-				}
-			};
-			Timer timer = new Timer();
-			timer.schedule(task, 0, 3000);
+		if (!task.isRunning()) {
+			task = new ChatExecutor();
+			timer = new Timer();
+			timer.schedule(task, 0, CHAT_COOLDOWN);
 		}
 	}
 
+	private class ChatExecutor extends TimerTask {
+
+		private boolean isRunning = false;
+
+		@Override
+		public void run() {
+			isRunning = true;
+			if (messageQueue.isEmpty()) {
+				timer.cancel();
+				this.cancel();
+				isRunning = false;
+				return;
+			}
+			String message = messageQueue.remove();
+			bot.sendMessage(message);
+		}
+
+		public boolean isRunning() {
+			return isRunning;
+		}
+	}
 }
