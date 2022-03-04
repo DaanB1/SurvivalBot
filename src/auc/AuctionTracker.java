@@ -144,6 +144,8 @@ public class AuctionTracker {
 	}
 
 	private static int costOfSubstitution(char a, char b) {
+		if(a == ' ' || b == ' ' || a == '_' || b == '_')
+			return 0;
 		return a == b ? 0 : 1;
 	}
 

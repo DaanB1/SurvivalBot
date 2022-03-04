@@ -86,7 +86,7 @@ public class MinecraftBot {
 
 			@Override
 			public void disconnected(DisconnectedEvent event) {
-				System.out.println("Disconnected: " + event.getReason());
+				System.out.println("Disconnected: " + event.getCause().getMessage());
 				reconnect();
 			}
 		});

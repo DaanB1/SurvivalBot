@@ -32,6 +32,7 @@ public class ControlledMessageSender {
 		if (!task.isRunning()) {
 			task = new ChatExecutor();
 			timer = new Timer();
+			task.activate();
 			timer.schedule(task, 0, CHAT_COOLDOWN);
 		}
 	}
@@ -55,6 +56,10 @@ public class ControlledMessageSender {
 
 		public boolean isRunning() {
 			return isRunning;
+		}
+		
+		public void activate() {
+			isRunning = true;
 		}
 	}
 }
