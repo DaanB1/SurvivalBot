@@ -14,8 +14,12 @@ public class ChatReader {
 		this.tracker = new AuctionTracker();
 	}
 
+	/**
+	 * Analyzes 
+	 * @param message
+	 */
 	public void readLine(Component message) {
-		String line = getMessage(message);
+		String line = fromComponent(message);
 		System.out.println(line);
 		String[] words = line.split(" ");
 		if (words.length == 0)
@@ -32,7 +36,7 @@ public class ChatReader {
 	 * @param message
 	 * @return
 	 */
-	private String getMessage(Component message) {
+	public String fromComponent(Component message) {
 		StringBuilder sb = new StringBuilder();
 		if (message instanceof TextComponent) {
 			sb.append(((TextComponent) message).content());
@@ -63,9 +67,8 @@ public class ChatReader {
 				short count = Short.parseShort(words[5]);
 				tracker.aucStart(buyer, item, count);
 			} else if (words[6].contentEquals("won")) { // auction finished
-				String priceString = words[8].replaceAll(",", "");
+				String priceString = words[8].replaceAll(",", "").replaceAll("K", "000");
 				priceString = priceString.substring(1);
-				System.out.println("DEBUG: price = " + priceString);
 				long price = Long.parseLong(priceString);
 				String buyer = words[10].replaceAll("!", "");
 				tracker.aucEnd(price, buyer);
@@ -77,7 +80,7 @@ public class ChatReader {
 	}
 
 	/**
-	 * 
+	 * Responds to chat commands such as "AucBot price [item]"
 	 * @param line
 	 * @param words
 	 */
@@ -85,7 +88,7 @@ public class ChatReader {
 		if (line.contains(" price ") && (!line.contains("(From ") || !line.contains("§8(§aFrom"))) {
 			String guess = line.substring(line.indexOf(" price ") + 7, line.length());
 			String answer = tracker.getItemInfo(guess);
-			bot.sendControlledMessage(answer);
+			bot.sendMessage(answer);
 		}
 	}
 

@@ -56,18 +56,20 @@ public class AuctionTracker {
 		}
 	}
 
+	/**
+	 * Retrieves information about the specified item and returns it in a formatted string.
+	 * @param itemGuess
+	 * @return
+	 */
 	public String getItemInfo(String itemGuess) {
 		String item = bestGuess(itemGuess);
 		if (item == null)
 			return "Could not find any information about '" + itemGuess + "'";
 
 		long totalPrice = 0;
-		long recentPrice = 0;
 		int totalCount = 0;
-		int recentCount = 0;
 		boolean stackable = false;
 
-		Instant now = Instant.now();
 		// retrieve data about item from database
 		try {
 			String querry = "SELECT count, price, datetime FROM survauc WHERE item = '" + item + "'";
@@ -75,14 +77,8 @@ public class AuctionTracker {
 			while (rs.next()) {
 				short count = rs.getShort("count");
 				long price = rs.getLong("price");
-				Timestamp then = rs.getTimestamp("datetime");
-
 				totalPrice += price;
 				totalCount += count;
-				if (ChronoUnit.DAYS.between(now, then.toInstant()) <= 14) {
-					recentPrice += price;
-					recentCount += count;
-				}
 				if (count > 1) {
 					stackable = true;
 				}
@@ -95,13 +91,22 @@ public class AuctionTracker {
 
 		// calculate simple statistics from data
 		double totalAvg = totalPrice / (double) totalCount;
-	
+
 		if (stackable && totalAvg < 3) {
-			return "64 " + item + " sells on average for $" + (int) (totalAvg * 64) + " (" + totalCount + " total sales)";
+			return "64 " + item + " sells on average for $" + (int) (totalAvg * 64) + " (" + totalCount
+					+ " total sales)";
 		} else
 			return "1 " + item + " sells on average for $" + (int) totalAvg + " (" + totalCount + " total sales)";
 	}
 
+	/**
+	 * Attempts to determine which items is meant. 
+	 * eg: bestGuess("gold igot") returns "GOLD_INGOT"
+	 * returns null when no match is found.
+	 * 
+	 * @param itemGuess
+	 * @return
+	 */
 	private String bestGuess(String itemGuess) {
 		itemGuess = itemGuess.toLowerCase();
 		if (knownItems.contains(itemGuess)) {
@@ -112,7 +117,7 @@ public class AuctionTracker {
 		for (String item : knownItems) {
 			if (!item.toLowerCase().startsWith(itemGuess.substring(0, 1)))
 				continue;
-			int dist = levenstein(itemGuess, item.toLowerCase());
+			int dist = levenshtein(itemGuess, item.toLowerCase());
 			if (dist < leastDist) {
 				leastDist = dist;
 				bestGuess = item;
@@ -125,7 +130,8 @@ public class AuctionTracker {
 		}
 	}
 
-	private static int levenstein(String x, String y) {
+	// credits to stackoverflow for the part below
+	private static int levenshtein(String x, String y) {
 		int[][] dp = new int[x.length() + 1][y.length() + 1];
 
 		for (int i = 0; i <= x.length(); i++) {
@@ -144,7 +150,7 @@ public class AuctionTracker {
 	}
 
 	private static int costOfSubstitution(char a, char b) {
-		if(a == ' ' || b == ' ' || a == '_' || b == '_')
+		if (a == ' ' || b == ' ' || a == '_' || b == '_')
 			return 0;
 		return a == b ? 0 : 1;
 	}

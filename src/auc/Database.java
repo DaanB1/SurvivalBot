@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public class Database {
+	//This class creates a connection to the remote database
 
 	private Connection connection;
 	private Statement stmt;

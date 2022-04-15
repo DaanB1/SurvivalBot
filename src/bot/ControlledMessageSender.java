@@ -22,6 +22,7 @@ public class ControlledMessageSender {
 		this.bot = bot;
 		this.messageQueue = new LinkedList<>();
 		this.task = new ChatExecutor();
+		this.timer = new Timer();
 	}
 
 	public void sendMessage(String message) {
@@ -31,9 +32,7 @@ public class ControlledMessageSender {
 		messageQueue.add(message);
 		if (!task.isRunning()) {
 			task = new ChatExecutor();
-			timer = new Timer();
 			task.activate();
-			timer.schedule(task, 0, CHAT_COOLDOWN);
 		}
 	}
 
@@ -43,15 +42,12 @@ public class ControlledMessageSender {
 
 		@Override
 		public void run() {
-			isRunning = true;
 			if (messageQueue.isEmpty()) {
-				timer.cancel();
-				this.cancel();
 				isRunning = false;
+				cancel();
 				return;
 			}
-			String message = messageQueue.remove();
-			bot.sendMessage(message);
+			bot.sendInstantMessage(messageQueue.remove());
 		}
 
 		public boolean isRunning() {
@@ -60,6 +56,7 @@ public class ControlledMessageSender {
 		
 		public void activate() {
 			isRunning = true;
+			timer.schedule(task, 0, CHAT_COOLDOWN);
 		}
 	}
 }
