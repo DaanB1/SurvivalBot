@@ -1,9 +1,11 @@
 package bot;
 
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.UUID;
 
+import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
+import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundPlayerInfoPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.ClientboundMoveEntityPosPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.ClientboundMoveEntityPosRotPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.ClientboundMoveEntityRotPacket;
@@ -11,66 +13,34 @@ import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.Client
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.ClientboundTeleportEntityPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.spawn.ClientboundAddPlayerPacket;
 
-//Makes the bot look at the closest player
+//Tracks the location of players nearby
 public class PlayerTracker {
 
 	private MinecraftBot bot;
 	private HashMap<Integer, Position> nearbyPlayers;
-	private Timer timer;
-	private TimerTask task;
-
-	private static final int MAX_DISTANCE = 15;
+	private HashMap<UUID, PlayerListEntry> playerListEntries;
 
 	public PlayerTracker(MinecraftBot bot) {
 		this.bot = bot;
 		this.nearbyPlayers = new HashMap<>();
-		this.timer = new Timer();
 	}
-
-	public void start() {
-		task = new TimerTask() {
-			@Override
-			public void run() {
-				Position lookAt = getClosestPlayerLocation();
-				if (lookAt == null)
-					return;
-
-				Position myLoc = bot.getPosition();
-				double distance = myLoc.distance(lookAt);
-				double dx = myLoc.getX() - lookAt.getX();
-				double dy = myLoc.getY() - lookAt.getY();
-				double dz = myLoc.getZ() - lookAt.getZ();
-
-				try {
-					// credits to stackoverflow for these formulas
-					float pitch = (float) Math.asin(dy / distance);
-					float yaw = (float) (Math.asin(dx / (Math.cos(pitch) * distance)) * (180 / Math.PI));
-					pitch = (float) (pitch * (180 / Math.PI));
-
-					// hot fix
-					if (dz > 0 && yaw > 0)
-						yaw = 180 - yaw;
-					if (dz > 0 && yaw < 0)
-						yaw = -180 - yaw;
-					if (Float.isNaN(yaw) || Float.isNaN(pitch))
-						return;
-
-					bot.rotate(yaw, pitch);
-					
-					//if player is looking back at the bot, start sneaking
-					boolean pitchCheck = Math.abs(lookAt.getPitch() + pitch) < 5;
-					boolean yawCheck = Math.abs(lookAt.getYaw() - yaw - 180) % 360 < 2 || Math.abs(lookAt.getYaw() - yaw - 180) % 360 > 358;
-					if (pitchCheck && yawCheck) {
-						bot.startSneaking();
-					} else {
-						bot.stopSneaking();
-					}
-				} catch (Exception e) {
-					// potential divide by 0 exception if Math.cos(pitch) == 0
-				}
+	
+	public void updatePlayerList(ClientboundPlayerInfoPacket packet) {
+		PlayerListEntry[] entries = packet.getEntries();
+		for(int i = 0; i < entries.length; i++) {
+			switch(packet.getAction()) {
+			case ADD_PLAYER:
+				playerListEntries.put(entries[i].getProfile().getId(), entries[i]);
+				System.out.println("++[" + entries[i].getProfile().getName() + "]");
+				break;
+			case REMOVE_PLAYER:
+				playerListEntries.remove(entries[i].getProfile().getId());
+				System.out.println("--[" + entries[i].getProfile().getName() + "]");
+				break;
+			default:
+				return;
 			}
-		};
-		timer.schedule(task, 100, 100);
+		}
 	}
 
 	public void addPlayer(ClientboundAddPlayerPacket packet) {
@@ -126,7 +96,7 @@ public class PlayerTracker {
 
 		Position loc = bot.getPosition();
 		Position closest = null;
-		double leastDistance = MAX_DISTANCE;
+		double leastDistance = Double.MAX_VALUE;
 
 		for (Position l : nearbyPlayers.values()) {
 			double distance = loc.distance(l);
@@ -136,15 +106,14 @@ public class PlayerTracker {
 			}
 		}
 		return closest;
-
 	}
-
-	public void clear() {
-		nearbyPlayers.clear();
+	
+	public Collection<Position> getAllPositions() {
+		return nearbyPlayers.values();
 	}
-
-	public void stop() {
-		task.cancel();
+	
+	public PlayerListEntry getPlayerInfo(UUID id) {
+		return playerListEntries.get(id);
 	}
 
 }

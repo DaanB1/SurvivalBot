@@ -6,7 +6,7 @@ public class Main {
 		String username = System.getenv("mcusername");
 		String password = System.getenv("password");
 		MinecraftBot bot = new MinecraftBot(username, password, MinecraftBot.AccountType.MICROSOFT);
-		bot.login("localhost");
+		bot.connect("survival.munchymc.com");
 	}
 
 }

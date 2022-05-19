@@ -3,13 +3,18 @@ package auc;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 public class AuctionTracker {
 
+	private HashMap<String, Instant> requests;
+	private static final int REQUEST_COOLDOWN = 60;
+	
 	private Database db;
 	private ArrayList<String> knownItems;
 	private String seller;
@@ -17,6 +22,7 @@ public class AuctionTracker {
 	private short count;
 
 	public AuctionTracker() {
+		requests = new HashMap<>();
 		item = null;
 		count = 0;
 		knownItems = new ArrayList<>();
@@ -61,10 +67,11 @@ public class AuctionTracker {
 	 * @param itemGuess
 	 * @return
 	 */
-	public String getItemInfo(String itemGuess) {
+	public String getItemInfo(String itemGuess, String requestedBy) {
+		requests.put(requestedBy, Instant.now());
 		String item = bestGuess(itemGuess);
 		if (item == null)
-			return "Could not find any information about '" + itemGuess + "'";
+			return "Could not find any information about that item";
 
 		long totalPrice = 0;
 		int totalCount = 0;
@@ -86,7 +93,7 @@ public class AuctionTracker {
 		} catch (SQLException e) {
 			// item does not exist in database
 			System.out.println(e.getMessage());
-			return "Could not find any information about '" + item + "'";
+			return "Could not find any information about that item";
 		}
 
 		// calculate simple statistics from data
@@ -97,6 +104,33 @@ public class AuctionTracker {
 					+ " total sales)";
 		} else
 			return "1 " + item + " sells on average for $" + (int) totalAvg + " (" + totalCount + " total sales)";
+	}
+	
+	/**
+	 * Checks if player can make a new item lookup request
+	 * @param ign
+	 * @return
+	 */
+	public boolean canRequest(String ign) {
+		if(!requests.containsKey(ign))
+			return true;
+		
+		if(Duration.between(requests.get(ign), Instant.now()).getSeconds() < REQUEST_COOLDOWN) {
+			return false;
+		}
+		return true;
+	}
+	
+	/**
+	 * Gets the amount of seconds a player has to wait before being able to make a new request
+	 * @param ign
+	 * @return
+	 */
+	public int getCooldown(String ign) {
+		if(!requests.containsKey(ign))
+			return 0;
+		
+		return REQUEST_COOLDOWN - (int) Duration.between(requests.get(ign), Instant.now()).getSeconds();
 	}
 
 	/**

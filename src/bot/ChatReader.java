@@ -1,5 +1,7 @@
 package bot;
 
+import java.util.UUID;
+
 import auc.AuctionTracker;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -18,7 +20,7 @@ public class ChatReader {
 	 * Analyzes 
 	 * @param message
 	 */
-	public void readLine(Component message) {
+	public void readLine(Component message, UUID sender) {
 		String line = fromComponent(message);
 		System.out.println(line);
 		String[] words = line.split(" ");
@@ -26,9 +28,10 @@ public class ChatReader {
 			return;
 		if (words[0].contentEquals("AUCTION"))
 			trackAuc(words);
-		else if (line.contains(bot.getUsername()) || line.contains("§8(§aFrom")) {
+		else if (line.toLowerCase().contains(bot.getUsername().toLowerCase())) {
 			readCommand(line, words);
 		}
+		bot.getPlayerTracker().getPlayerInfo(sender).getProfile().getName();
 	}
 
 	/**
@@ -85,11 +88,32 @@ public class ChatReader {
 	 * @param words
 	 */
 	private void readCommand(String line, String[] words) {
-		if (line.contains(" price ") && (!line.contains("(From ") || !line.contains("§8(§aFrom"))) {
-			String guess = line.substring(line.indexOf(" price ") + 7, line.length());
-			String answer = tracker.getItemInfo(guess);
+		String l = line.toLowerCase();
+		if (l.endsWith(" price")) {
+			bot.sendMessage("Use: '" + bot.getUsername() + " price (Item name)'");
+		}
+		if (l.contains(" price ")) {
+			String ign = findIgn(words);
+			if(!tracker.canRequest(ign)) {
+				bot.sendMessage("/msg " + ign + " You are on cooldown. Wait " + tracker.getCooldown(ign) + " seconds.");
+				return;
+			}
+			String guess = line.substring(l.indexOf(" price ") + 7, line.length());
+			String answer = tracker.getItemInfo(guess, ign);
 			bot.sendMessage(answer);
 		}
+	}
+	
+	private String findIgn(String[] words) {
+		String ign = "";
+		for(int i = 1; i < words.length; i++) {
+			if(words[i].contentEquals("»")) {
+				ign = words[i-1];
+				break;
+			}
+		}
+		return ign.replaceAll("(\\[\\w\\])?\\+*", "");
+		
 	}
 
 }

@@ -39,7 +39,7 @@ public class AutoReconnect {
 		attempts++;
 		latestAttempt = Instant.now();
 		try {
-			bot.login(bot.getHost());
+			bot.connect(bot.getHost());
 		} catch (Exception e) {
 			// TODO: Catch authentication error and re-authenticate
 			reconnect();

@@ -15,6 +15,7 @@ import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundDi
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundKeepAlivePacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundLoginPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundPingPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundPlayerInfoPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.ClientboundResourcePackPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.ClientboundMoveEntityPosPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.clientbound.entity.ClientboundMoveEntityPosRotPacket;
@@ -28,6 +29,7 @@ import com.github.steveice10.mc.protocol.packet.ingame.serverbound.ServerboundKe
 import com.github.steveice10.mc.protocol.packet.ingame.serverbound.ServerboundPongPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.serverbound.ServerboundResourcePackPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerPosPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerPosRotPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerRotPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.serverbound.player.ServerboundPlayerCommandPacket;
 import com.github.steveice10.packetlib.Session;
@@ -35,6 +37,8 @@ import com.github.steveice10.packetlib.event.session.DisconnectedEvent;
 import com.github.steveice10.packetlib.event.session.SessionAdapter;
 import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
+
+import movement.MovementManager;
 
 public class MinecraftBot {
 
@@ -50,12 +54,10 @@ public class MinecraftBot {
 	private AutoReconnect ar;
 	private ChatReader cr;
 	private PlayerTracker pt;
+	private MovementManager mm;
 
-	private Position loc;
+	private Position pos;
 	private int entityId;
-	private double pitch = 0;
-	private double yaw = 0;
-	private boolean isSneaking = false;
 
 	/**
 	 * Constructor for online accounts
@@ -68,10 +70,12 @@ public class MinecraftBot {
 		this.username = username;
 		this.password = password;
 		this.type = type;
+		this.pos = new Position(0, 0, 0);
 		this.cms = new ControlledMessageSender(this);
 		this.ar = new AutoReconnect(this);
 		this.cr = new ChatReader(this);
 		this.pt = new PlayerTracker(this);
+		this.mm = new MovementManager(this);
 		authenticate();
 	}
 
@@ -102,7 +106,7 @@ public class MinecraftBot {
 	 * 
 	 * @param host : the server ip
 	 */
-	public void login(String host) {
+	public void connect(String host) {
 		System.out.println("Joining " + host + "...");
 		this.host = host;
 		MinecraftProtocol protocol = new MinecraftProtocol(authService.getSelectedProfile(),
@@ -119,7 +123,7 @@ public class MinecraftBot {
 				if (packet instanceof ClientboundLoginPacket) {
 					entityId = ((ClientboundLoginPacket) packet).getEntityId();
 					System.out.println(getUsername() + " logged in succesfully");
-					pt.start();
+					mm.startEyeContact();
 
 				} else if (packet instanceof ClientboundKeepAlivePacket) {
 					long pingId = ((ClientboundKeepAlivePacket) packet).getPingId();
@@ -129,24 +133,19 @@ public class MinecraftBot {
 					int pingId = ((ClientboundPingPacket) packet).getId();
 					session.send(new ServerboundPongPacket(pingId));
 
-				} else if (packet instanceof ClientboundResourcePackPacket) {
-					session.send(new ServerboundResourcePackPacket(ResourcePackStatus.ACCEPTED));
-					session.send(new ServerboundResourcePackPacket(ResourcePackStatus.SUCCESSFULLY_LOADED));
-
 				} else if (packet instanceof ClientboundDisconnectPacket) {
 					String reason = cr.fromComponent(((ClientboundDisconnectPacket) packet).getReason());
 					System.err.println("Disconnected: " + reason);
-					pt.stop();
+					mm.stopAll();
 					ar.reconnect();
 
-					// Packets used for tracking players
+				// Packets used for tracking players
 				} else if (packet instanceof ClientboundPlayerPositionPacket) {
 					ClientboundPlayerPositionPacket p = (ClientboundPlayerPositionPacket) packet;
-					if (loc == null)
-						loc = new Position(p.getX(), p.getY(), p.getZ());
-					else
-						loc.set(p.getX(), p.getY(), p.getZ());
-					session.send(new ServerboundMovePlayerPosPacket(true, loc.getX(), loc.getY(), loc.getZ()));
+					pos.set(p.getX(), p.getY(), p.getZ());
+					pos.rot(p.getYaw(), p.getPitch());
+					session.send(new ServerboundMovePlayerPosPacket(true, pos.getX(), pos.getY(), pos.getZ()));
+					System.err.println("Recieved PosRotPacket");
 
 				} else if (packet instanceof ClientboundMoveEntityPosRotPacket) {
 					pt.updatePlayerPosition((ClientboundMoveEntityPosRotPacket) packet);
@@ -166,16 +165,20 @@ public class MinecraftBot {
 				} else if (packet instanceof ClientboundRemoveEntitiesPacket) {
 					pt.removePlayers((ClientboundRemoveEntitiesPacket) packet);
 
-					// Packets used for chat
+					
+				} else if(packet instanceof ClientboundPlayerInfoPacket) {
+					pt.updatePlayerList((ClientboundPlayerInfoPacket) packet);
+				// Packets used for chat
 				} else if (packet instanceof ClientboundChatPacket) {
-					cr.readLine(((ClientboundChatPacket) packet).getMessage());
+					ClientboundChatPacket p = (ClientboundChatPacket) packet;
+					cr.readLine(p.getMessage(), p.getSenderUuid());
 				}
 			}
 
 			@Override
 			public void disconnected(DisconnectedEvent event) {
 				System.err.println("Disconnected: " + event.getCause().getMessage());
-				pt.stop();
+				mm.stopAll();
 				ar.reconnect();
 			}
 		});
@@ -202,32 +205,16 @@ public class MinecraftBot {
 		cms.sendMessage(message);
 	}
 
-	/**
-	 * Rotates the bot according to the yaw and pitch
-	 * 
-	 * @param yaw
-	 * @param pitch
-	 */
-	public void rotate(float yaw, float pitch) {
-		if (this.yaw == yaw && this.pitch == pitch)
-			return;
-		session.send(new ServerboundMovePlayerRotPacket(true, yaw, pitch));
-		this.yaw = yaw;
-		this.pitch = pitch;
+	public Session getSession() {
+		return session;
 	}
 
-	public void startSneaking() {
-		if (!isSneaking) {
-			session.send(new ServerboundPlayerCommandPacket(entityId, PlayerState.START_SNEAKING));
-			isSneaking = true;
-		}
+	public PlayerTracker getPlayerTracker() {
+		return pt;
 	}
 
-	public void stopSneaking() {
-		if (isSneaking) {
-			session.send(new ServerboundPlayerCommandPacket(entityId, PlayerState.STOP_SNEAKING));
-			isSneaking = false;
-		}
+	public MovementManager getMovementManager() {
+		return mm;
 	}
 
 	public String getUsername() {
@@ -239,7 +226,7 @@ public class MinecraftBot {
 	}
 
 	public Position getPosition() {
-		return loc;
+		return pos;
 	}
 
 	public int getEntityId() {

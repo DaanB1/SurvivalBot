@@ -15,7 +15,7 @@ public class ControlledMessageSender {
 	private Timer timer;
 	private Queue<String> messageQueue;
 	
-	private static final int CHAT_COOLDOWN = 3000;
+	private static final int CHAT_COOLDOWN = 5000;
 	private static final int MAX_QUEUE_SIZE = 5;
 
 	public ControlledMessageSender(MinecraftBot bot) {
